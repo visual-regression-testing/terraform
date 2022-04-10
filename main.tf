@@ -14,17 +14,17 @@ provider "aws" {
   region  = "us-east-1"
 }
 
-variable "vrtesting_aws_rds_username" {
+variable "vrtesting_rds_username" {
   description = "The username for the DB master user"
   type        = string
 }
 
-variable "vrtesting_aws_rds_password" {
+variable "vrtesting_rds_password" {
   description = "The password for the DB master user"
   type        = string
 }
 
-variable "vrtesting_rds_snapshot_id" {
+variable "vrtesting_rds_snapshot" {
   description = "The name of the RDS snapshot"
   type        = string
 }
@@ -34,23 +34,57 @@ variable "vrtesting_s3_screenshot_bucket_name" {
   type        = string
 }
 
+variable "vrtesting_rds_subnet_group" {
+  description = "The subnet group of the RDS instance"
+  type        = string
+}
+
+variable "vrtesting_rds_publicly_accessible" {
+  description = "Is the RDS instance publicly accessible"
+  type        = string
+}
+
+variable "vrtesting_environment" {
+  description = "Environment"
+  type        = string
+}
 
 resource "aws_db_instance" "visual_regression_rds_instance" {
-  engine                    = "mysql"
-  engine_version            = "5.7"
-  instance_class            = "db.t3.micro"
-  username                  = var.vrtesting_aws_rds_username
-  password                  = var.vrtesting_aws_rds_password
-  parameter_group_name      = "default.mysql8.0"
-  snapshot_identifier       = var.vrtesting_rds_snapshot_id
-  final_snapshot_identifier = var.vrtesting_rds_snapshot_id
+  engine         = "mysql"
+  engine_version = "8.0.23"
+  instance_class = "db.t2.micro"
+  // required unless a snapshot identifier is provided
+  // if using a snapshot the database already has a master username
+  # username                  = var.vrtesting_rds_username
+  password = var.vrtesting_rds_password
+  # snapshot_identifier = data.aws_db_snapshot.latest_snapshot.id
+  snapshot_identifier       = var.vrtesting_rds_snapshot
+  final_snapshot_identifier = "${var.vrtesting_environment}-app-db-snaphot-${replace(timestamp(), ":", "-")}"
+  db_subnet_group_name      = var.vrtesting_rds_subnet_group
+  publicly_accessible       = var.vrtesting_rds_publicly_accessible
+
+  #  lifecycle {
+  #    ignore_changes = [
+  #      final_snapshot_identifier,
+  #    ]
+  #  }
+
+  lifecycle {
+    ignore_changes = [snapshot_identifier]
+  }
 }
 
-data "aws_db_snapshot" "latest_prod_snapshot" {
+# this is not working
+data "aws_db_snapshot" "latest_snapshot" {
   db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
   most_recent            = true
-  db_snapshot_identifier = var.vrtesting_rds_snapshot_id
 }
+
+#
+#data "aws_db_snapshot" "latest_prod_snapshot" {
+#  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
+#  db_snapshot_identifier = var.vrtesting_rds_snapshot
+#}
 
 resource "aws_s3_bucket" "vr_testing" {
   bucket = var.vrtesting_s3_screenshot_bucket_name
