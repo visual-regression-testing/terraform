@@ -9,6 +9,15 @@ terraform {
   required_version = ">= 0.14.9"
 }
 
+###########
+# VARIABLES
+###########
+
+variable "vrtesting_environment" {
+  description = "Environment"
+  type        = string
+}
+
 provider "aws" {
   profile = "default"
   region  = "us-east-1"
@@ -44,10 +53,19 @@ variable "vrtesting_rds_publicly_accessible" {
   type        = string
 }
 
-variable "vrtesting_environment" {
-  description = "Environment"
+variable "website_auth_github_id" {
+  description = "GITHUB_ID for developer app"
   type        = string
 }
+
+variable "website_auth_github_secret" {
+  description = "GITHUB_SECRET for developer app"
+  type        = string
+}
+
+##########
+# DATABASE
+##########
 
 resource "aws_db_instance" "visual_regression_rds_instance" {
   engine         = "mysql"
@@ -85,6 +103,32 @@ data "aws_db_snapshot" "latest_snapshot" {
 #  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
 #  db_snapshot_identifier = var.vrtesting_rds_snapshot
 #}
+
+#########
+# WEBSITE
+#########
+
+# todo need to update the env var
+resource "aws_amplify_app" "website" {
+  name       = "web-server"
+  repository = "https://github.com/visual-regression-testing/web-server"
+
+  # The default rewrites and redirects added by the Amplify Console.
+  custom_rule {
+    source = "/<*>"
+    status = "404"
+    target = "/index.html"
+  }
+
+  environment_variables = {
+    ENV = var.website_auth_github_id
+    ENV = var.website_auth_github_secret
+  }
+}
+
+###########
+# S3 bucket
+###########
 
 resource "aws_s3_bucket" "vr_testing" {
   bucket = var.vrtesting_s3_screenshot_bucket_name
