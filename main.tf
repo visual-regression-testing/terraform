@@ -63,6 +63,22 @@ variable "website_auth_github_secret" {
   type        = string
 }
 
+
+variable "website_nextauth_secret" {
+  description = "NextAuth secret"
+  type        = string
+}
+
+variable "website_github_deploy_key" {
+  description = "To access other GitHub repositories via npm install (to be deprecated by packages someday)"
+  type        = string
+}
+
+variable "website_github_personal_or_oauth_token" {
+  description = "GitHub personal or OAuth token to clone the GitHub repository"
+  type        = string
+}
+
 ##########
 # DATABASE
 ##########
@@ -109,21 +125,65 @@ data "aws_db_snapshot" "latest_snapshot" {
 #########
 
 # todo need to update the env var
-resource "aws_amplify_app" "website" {
-  name       = "web-server"
+resource "aws_amplify_app" "web_server" {
+  name       = "website"
   repository = "https://github.com/visual-regression-testing/web-server"
 
-  # The default rewrites and redirects added by the Amplify Console.
+  access_token = var.website_github_personal_or_oauth_token
+
   custom_rule {
     source = "/<*>"
-    status = "404"
+    status = "404-200"
     target = "/index.html"
   }
 
+  iam_service_role_arn = aws_iam_role.amplify_role.arn
+
+  enable_branch_auto_build    = true
+  enable_branch_auto_deletion = true
+}
+
+resource "aws_amplify_branch" "website_production" {
+  app_id      = aws_amplify_app.web_server.id
+  branch_name = "next10"
+  framework   = "Next.js - SSR"
+  stage       = "PRODUCTION"
+
   environment_variables = {
-    ENV = var.website_auth_github_id
-    ENV = var.website_auth_github_secret
+    DEPLOY_KEY         = var.website_github_deploy_key
+    GITHUB_ID          = var.website_auth_github_id
+    GITHUB_SECRET      = var.website_auth_github_secret
+    NEXTAUTH_URL       = aws_amplify_app.web_server.default_domain
+    NEXT_PUBLIC_SECRET = var.website_nextauth_secret
   }
+}
+
+resource "aws_iam_role" "amplify_role" {
+  name = "amplify_deploy_terraform_role"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "amplify.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+POLICY
+}
+
+resource "aws_iam_role_policy" "amplify_role_policy" {
+  name = "amplify_iam_role_policy"
+  role = aws_iam_role.amplify_role.id
+
+  policy = file("${path.cwd}/amplify_role_policies.json")
 }
 
 ###########
