@@ -126,7 +126,7 @@ data "aws_db_snapshot" "latest_snapshot" {
 
 # todo need to update the env var
 resource "aws_amplify_app" "web_server" {
-  name       = "website"
+  name       = "web-server"
   repository = "https://github.com/visual-regression-testing/web-server"
 
   access_token = var.website_github_personal_or_oauth_token
