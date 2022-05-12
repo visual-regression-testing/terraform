@@ -79,6 +79,11 @@ variable "website_github_personal_or_oauth_token" {
   type        = string
 }
 
+variable "website_branch" {
+  description = "The main GitHub branch and redirect URL"
+  type        = string
+}
+
 ##########
 # DATABASE
 ##########
@@ -137,6 +142,14 @@ resource "aws_amplify_app" "web_server" {
     target = "/index.html"
   }
 
+  # todo find out how to not have to do this https://sreeraj.dev/setting-up-aws-amplify-for-a-next-js-ssr-app-with-terraform/
+  # Comment this on the first run, trigger a build of your branch, This will added automatically on the console after deployment. Add it here to ensure your subsequent terraform runs don't break your amplify deployment.
+  custom_rule {
+    source = "/<*>"
+    status = "200"
+    target = "https://d2c3zynfrk5k2n.cloudfront.net/<*>"
+  }
+
   iam_service_role_arn = aws_iam_role.amplify_role.arn
 
   enable_branch_auto_build    = true
@@ -145,16 +158,28 @@ resource "aws_amplify_app" "web_server" {
 
 resource "aws_amplify_branch" "website_production" {
   app_id      = aws_amplify_app.web_server.id
-  branch_name = "next10"
+  branch_name = var.website_branch
   framework   = "Next.js - SSR"
   stage       = "PRODUCTION"
 
   environment_variables = {
-    DEPLOY_KEY         = var.website_github_deploy_key
-    GITHUB_ID          = var.website_auth_github_id
-    GITHUB_SECRET      = var.website_auth_github_secret
-    NEXTAUTH_URL       = aws_amplify_app.web_server.default_domain
+    # deploy key is required because it needs a separate key for getting a (public) dependency via GitHub repo?
+    DEPLOY_KEY = var.website_github_deploy_key
+
+    # NextAuth
+    NEXTAUTH_URL       = "https://${var.website_branch}.${aws_amplify_app.web_server.default_domain}"
     NEXT_PUBLIC_SECRET = var.website_nextauth_secret
+
+    # GitHub app for authentication
+    GITHUB_ID     = var.website_auth_github_id
+    GITHUB_SECRET = var.website_auth_github_secret
+
+    # Database connection
+    MYSQL_HOST     = aws_db_instance.visual_regression_rds_instance.address
+    MYSQL_DATABASE = aws_db_instance.visual_regression_rds_instance.name
+    MYSQL_USERNAME = aws_db_instance.visual_regression_rds_instance.username
+    MYSQL_PASSWORD = var.vrtesting_rds_password
+    MYSQL_PORT     = aws_db_instance.visual_regression_rds_instance.port
   }
 }
 
