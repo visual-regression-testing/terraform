@@ -23,6 +23,11 @@ provider "aws" {
   region  = "us-east-1"
 }
 
+variable "keypair" {
+  description = "The keypair for connecting to the EC2 instance"
+  type        = string
+}
+
 variable "vrtesting_rds_username" {
   description = "The username for the DB master user"
   type        = string
@@ -63,7 +68,6 @@ variable "website_auth_github_secret" {
   type        = string
 }
 
-
 variable "website_nextauth_secret" {
   description = "NextAuth secret"
   type        = string
@@ -77,6 +81,22 @@ variable "website_github_deploy_key" {
 variable "website_github_personal_or_oauth_token" {
   description = "GitHub personal or OAuth token to clone the GitHub repository"
   type        = string
+}
+
+variable "tag" {
+  description = "The tag for all resources related to this project"
+  type        = string
+}
+
+
+data "template_file" "init" {
+  template = file("${path.module}/scripts/setup_web_server.tpl")
+
+  vars = {
+    GITHUB_ID     = "${var.website_auth_github_id}"
+    GITHUB_SECRET = "${var.website_auth_github_secret}"
+    NEXTAUTH_SECRET    = "${var.website_nextauth_secret}"
+  }
 }
 
 ##########
@@ -94,7 +114,7 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   # snapshot_identifier = data.aws_db_snapshot.latest_snapshot.id
   snapshot_identifier       = var.vrtesting_rds_snapshot
   final_snapshot_identifier = "${var.vrtesting_environment}-app-db-snaphot-${replace(timestamp(), ":", "-")}"
-  db_subnet_group_name      = var.vrtesting_rds_subnet_group
+  db_subnet_group_name      = aws_db_subnet_group.db_subnet.name
   publicly_accessible       = var.vrtesting_rds_publicly_accessible
 
   #  lifecycle {
@@ -108,11 +128,20 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   }
 }
 
-# this is not working
-data "aws_db_snapshot" "latest_snapshot" {
-  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
-  most_recent            = true
+resource "aws_db_subnet_group" "db_subnet" {
+  name       = "db_subnet_private"
+  subnet_ids = [aws_subnet.private.id, aws_subnet.public.id]
+
+  tags = {
+    Name = "subnet ${var.tag}"
+  }
 }
+
+# todo this is not working
+#data "aws_db_snapshot" "latest_snapshot" {
+#  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
+#  most_recent            = true
+#}
 
 #
 #data "aws_db_snapshot" "latest_prod_snapshot" {
@@ -120,71 +149,182 @@ data "aws_db_snapshot" "latest_snapshot" {
 #  db_snapshot_identifier = var.vrtesting_rds_snapshot
 #}
 
+resource "aws_vpc" "vpc" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "vpc ${var.tag}"
+  }
+}
+
+resource "aws_internet_gateway" "gateway" {
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    Name = "gateway ${var.tag}"
+  }
+}
+
+resource "aws_route_table" "route-table" {
+  vpc_id = aws_vpc.vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gateway.id
+  }
+
+  tags = {
+    Name = "test-env-route-table"
+  }
+}
+
+resource "aws_route_table_association" "subnet-association" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.route-table.id
+}
+
+## Private Subnet
+
+resource "aws_subnet" "private" {
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = "10.0.0.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "private subnet vr testing ${var.tag}"
+  }
+}
+
+resource "aws_route_table" "my_vpc_us_east_1a_private" {
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    Name = "Local Route Table for Isolated Private Subnet ${var.tag}"
+  }
+}
+
+resource "aws_route_table_association" "my_vpc_us_east_1a_private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.my_vpc_us_east_1a_private.id
+}
+
+## Public Subnet
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.vpc.id
+  cidr_block              = "10.0.3.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "public subnet ${var.tag}"
+  }
+}
+
+resource "aws_route_table" "my_vpc_us_east_1a_public" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gateway.id
+  }
+
+  tags = {
+    Name = "Public Subnet Route Table ${var.tag}"
+  }
+}
+
+## Security Groups
+
+resource "aws_security_group" "security_group" {
+  name   = "Security Group ${var.tag}"
+  vpc_id = aws_vpc.vpc.id
+
+  # SSH (todo do not use in production)
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # HTTP access via the web
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # allow EC2 to connect to RDS, not sure if this is correct
+  ingress {
+    from_port   = 80
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.vpc.cidr_block] # todo not sure if this is right
+  }
+
+  # allow everything that is required since terraform removes it automatically (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group)
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = -1
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Security Group ${var.tag}"
+  }
+}
+
+#resource "aws_network_interface" "network_interface_to_open_ec2_to_rds" {
+#  subnet_id   = aws_subnet.subnet.id
+#  private_ips = ["172.16.10.100"]
+#
+#  tags = {
+#    Name = var.tag  # todo other tags
+#  }
+#}
+
 #########
 # WEBSITE
 #########
 
-# todo need to update the env var
-resource "aws_amplify_app" "web_server" {
-  name       = "web-server"
-  repository = "https://github.com/visual-regression-testing/web-server"
+data "aws_ami" "amazon_linux" {
+  most_recent = true
 
-  access_token = var.website_github_personal_or_oauth_token
-
-  custom_rule {
-    source = "/<*>"
-    status = "404-200"
-    target = "/index.html"
+  filter {
+    name   = "image-id"
+    values = ["ami-0022f774911c1d690"]
   }
 
-  iam_service_role_arn = aws_iam_role.amplify_role.arn
-
-  enable_branch_auto_build    = true
-  enable_branch_auto_deletion = true
+  # owner of the AMI
+  owners = ["137112412989"]
 }
 
-resource "aws_amplify_branch" "website_production" {
-  app_id      = aws_amplify_app.web_server.id
-  branch_name = "next10"
-  framework   = "Next.js - SSR"
-  stage       = "PRODUCTION"
+resource "aws_instance" "web" {
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t2.small"
+  vpc_security_group_ids      = [aws_security_group.security_group.id]
+  subnet_id                   = aws_subnet.public.id
+  associate_public_ip_address = true
 
-  environment_variables = {
-    DEPLOY_KEY         = var.website_github_deploy_key
-    GITHUB_ID          = var.website_auth_github_id
-    GITHUB_SECRET      = var.website_auth_github_secret
-    NEXTAUTH_URL       = aws_amplify_app.web_server.default_domain
-    NEXT_PUBLIC_SECRET = var.website_nextauth_secret
+  user_data = data.template_file.init.rendered
+
+  key_name = "${var.tag}-deploy-key"
+
+  tags = {
+    Name = "Linux ${var.tag}"
   }
 }
 
-resource "aws_iam_role" "amplify_role" {
-  name = "amplify_deploy_terraform_role"
-
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression result to valid JSON syntax.
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "amplify.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-POLICY
+resource "aws_key_pair" "deployer" {
+  key_name   = "${var.tag}-deploy-key"
+  public_key = var.keypair
 }
 
-resource "aws_iam_role_policy" "amplify_role_policy" {
-  name = "amplify_iam_role_policy"
-  role = aws_iam_role.amplify_role.id
-
-  policy = file("${path.cwd}/amplify_role_policies.json")
-}
+## todo Launch RDS into VCS - RDS is above ^^^
+## todo should RDS use or go off migration (not important for initial deployment test)
 
 ###########
 # S3 bucket
@@ -219,4 +359,8 @@ resource "aws_s3_bucket_acl" "vr_testing_acl" {
       id = data.aws_canonical_user_id.current.id
     }
   }
+}
+
+output "ec2_global_ips" {
+  value = ["${aws_instance.web.*.public_ip}"]
 }
