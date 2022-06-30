@@ -56,3 +56,5 @@ echo "server {
       }" > /etc/nginx/conf.d/your-site.conf
 
 systemctl start nginx
+
+echo "Don't forget to update the GitHub callback URL in your app! (https://github.com/settings/apps)"
