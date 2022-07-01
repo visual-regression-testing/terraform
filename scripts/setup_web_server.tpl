@@ -39,6 +39,8 @@ echo "NEXTAUTH_URL=http://$(curl ifconfig.me)" >> .env
 yarn install
 yarn build
 
+# if you need to kill PM2 for testing/dev purposes
+# sudo pkill -f PM2
 pm2 start npm --name "web-server" -- start
 
 sudo amazon-linux-extras install nginx1 -y

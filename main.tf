@@ -99,9 +99,6 @@ data "template_file" "init" {
   }
 }
 
-## todo Launch RDS into VCS - RDS is above ^^^
-## todo should RDS use or go off migration (not important for initial deployment test)
-
 output "ec2_global_ips" {
   value = ["${aws_instance.web.*.public_ip}"]
 }
