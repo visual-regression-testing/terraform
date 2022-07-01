@@ -9,7 +9,7 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   password = var.vrtesting_rds_password
   # snapshot_identifier = data.aws_db_snapshot.latest_snapshot.id
   snapshot_identifier       = var.vrtesting_rds_snapshot
-  final_snapshot_identifier = "${var.vrtesting_environment}-app-db-snaphot-${replace(timestamp(), ":", "-")}"
+  final_snapshot_identifier = "${var.vrtesting_environment}-web-db-snaphot-${replace(timestamp(), ":", "-")}"
   db_subnet_group_name      = aws_db_subnet_group.db_subnet.name
   publicly_accessible       = var.vrtesting_rds_publicly_accessible
 
@@ -19,28 +19,24 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   #    ]
   #  }
 
+  vpc_security_group_ids = [aws_security_group.security_group.id]
+
   lifecycle {
     ignore_changes = [snapshot_identifier]
   }
 }
 
-resource "aws_db_subnet_group" "db_subnet" {
-  name       = "db_subnet_private"
-  subnet_ids = [aws_subnet.private.id, aws_subnet.public.id]
-
-  tags = {
-    Name = "subnet ${var.tag}"
-  }
-}
-
 # todo this is not working
-#data "aws_db_snapshot" "latest_snapshot" {
+#data "aws_db_snapshot" "latest_prod_snapshot" {
 #  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
 #  most_recent            = true
 #}
-
 #
-#data "aws_db_snapshot" "latest_prod_snapshot" {
+#data "aws_db_snapshot" "prod" {
 #  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
 #  db_snapshot_identifier = var.vrtesting_rds_snapshot
 #}
+
+
+## todo Launch RDS into VCS - RDS is above ^^^
+## todo should RDS use or go off migration (not important for initial deployment test)

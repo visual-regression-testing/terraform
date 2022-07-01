@@ -84,6 +84,17 @@ resource "aws_route_table" "my_vpc_us_east_1a_public" {
 }
 
 
+# Private Subnet
+resource "aws_db_subnet_group" "db_subnet" {
+  name       = "db_subnet_private"
+  subnet_ids = [aws_subnet.private.id, aws_subnet.public.id]
+
+  tags = {
+    Name = "subnet db ${var.tag}"
+  }
+}
+
+
 #resource "aws_network_interface" "network_interface_to_open_ec2_to_rds" {
 #  subnet_id   = aws_subnet.subnet.id
 #  private_ips = ["172.16.10.100"]
