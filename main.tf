@@ -83,6 +83,12 @@ variable "website_github_personal_or_oauth_token" {
   type        = string
 }
 
+variable "website_webserver_branch" {
+  description = "webserver repository branch to use"
+  default     = "origin/main"
+  type        = string
+}
+
 variable "tag" {
   description = "The tag for all resources related to this project"
   type        = string
@@ -96,6 +102,8 @@ data "template_file" "init" {
     GITHUB_ID       = "${var.website_auth_github_id}"
     GITHUB_SECRET   = "${var.website_auth_github_secret}"
     NEXTAUTH_SECRET = "${var.website_nextauth_secret}"
+
+    WEBSERVER_BRANCH = "${var.website_webserver_branch}"
 
     MYSQL_HOST     = "${aws_db_instance.visual_regression_rds_instance.address}"
     MYSQL_DATABASE = "${var.vrtesting_rds_snapshot_dbName}"
