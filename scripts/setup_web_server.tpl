@@ -2,7 +2,7 @@
 
 # If the script is having problems the log of this will be located at
 # /var/log/cloud-init-output.log
-# tail -1000 /var/log/cloud-init-output.log  > newLogfile
+# tail -1000 /var/log/cloud-init-output.log > newLogfile
 
 sudo su
 
@@ -36,11 +36,19 @@ echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET}" >> .env
 # gets the public IP since we don't know it at time of starting the EC2 server and can't pass it in
 echo "NEXTAUTH_URL=http://$(curl ifconfig.me)" >> .env
 
+# database
+echo "MYSQL_HOST=${MYSQL_HOST}" >> .env
+echo "MYSQL_DATABASE=${MYSQL_DATABASE}" >> .env
+echo "MYSQL_USERNAME=${MYSQL_USERNAME}" >> .env
+echo "MYSQL_PASSWORD=${MYSQL_PASSWORD}" >> .env
+
 yarn install
 yarn build
 
 # if you need to kill PM2 for testing/dev purposes
 # sudo pkill -f PM2
+
+# nextjs loads the vars from .env
 pm2 start npm --name "web-server" -- start
 
 sudo amazon-linux-extras install nginx1 -y

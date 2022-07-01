@@ -38,6 +38,11 @@ variable "vrtesting_rds_password" {
   type        = string
 }
 
+variable "vrtesting_rds_snapshot_dbName" {
+  description = "The database within the snapshot"
+  type        = string
+}
+
 variable "vrtesting_rds_snapshot" {
   description = "The name of the RDS snapshot"
   type        = string
@@ -45,11 +50,6 @@ variable "vrtesting_rds_snapshot" {
 
 variable "vrtesting_s3_screenshot_bucket_name" {
   description = "The bucket for storing comparison images"
-  type        = string
-}
-
-variable "vrtesting_rds_subnet_group" {
-  description = "The subnet group of the RDS instance"
   type        = string
 }
 
@@ -96,6 +96,11 @@ data "template_file" "init" {
     GITHUB_ID       = "${var.website_auth_github_id}"
     GITHUB_SECRET   = "${var.website_auth_github_secret}"
     NEXTAUTH_SECRET = "${var.website_nextauth_secret}"
+
+    MYSQL_HOST     = "${aws_db_instance.visual_regression_rds_instance.address}"
+    MYSQL_DATABASE = "${var.vrtesting_rds_snapshot_dbName}"
+    MYSQL_USERNAME = "${var.vrtesting_rds_username}"
+    MYSQL_PASSWORD = "${var.vrtesting_rds_password}"
   }
 }
 
