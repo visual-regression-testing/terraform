@@ -19,7 +19,7 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   #    ]
   #  }
 
-  vpc_security_group_ids = [aws_security_group.security_group.id]
+  vpc_security_group_ids = [aws_security_group.db_security_group.id]
 
   lifecycle {
     ignore_changes = [snapshot_identifier]
