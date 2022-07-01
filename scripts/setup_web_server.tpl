@@ -26,7 +26,7 @@ cd /usr/app
 
 git clone https://github.com/visual-regression-testing/web-server
 cd web-server
-git checkout origin/test # todo should be main # this is testing
+git checkout ${WEBSERVER_BRANCH}
 
 # required for Next to build properly
 echo "GITHUB_ID=${GITHUB_ID}" >> .env

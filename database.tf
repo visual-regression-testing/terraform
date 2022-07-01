@@ -26,7 +26,6 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
   }
 }
 
-# todo this is not working
 #data "aws_db_snapshot" "latest_prod_snapshot" {
 #  db_instance_identifier = aws_db_instance.visual_regression_rds_instance.id
 #  most_recent            = true
@@ -37,6 +36,4 @@ resource "aws_db_instance" "visual_regression_rds_instance" {
 #  db_snapshot_identifier = var.vrtesting_rds_snapshot
 #}
 
-
-## todo Launch RDS into VCS - RDS is above ^^^
-## todo should RDS use or go off migration (not important for initial deployment test)
+# todo should RDS use or go off migration (not important for initial deployment test)
